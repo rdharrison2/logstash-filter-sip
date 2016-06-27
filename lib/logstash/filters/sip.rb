@@ -38,7 +38,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   config :include_keys, :validate => :array, :default => [
            "method", "request_uri",
            "status_code", "status_reason",
-           "call_id", "contact", "cseq", "from", "to", "user_agent"]
+           "call_id", "contact", "cseq", "from_uri", "to_uri", "user_agent"]
 
   # An array specifying the headers/values to not add to the event
   config :exclude_keys, :validate => :array, :default => []
@@ -51,6 +51,23 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     return false if not @include_keys.empty? and not @include_keys.include?(key)
     return false if @exclude_keys.include?(key)
     return true
+  end
+
+  def parse_uri(text)
+    # contact-param  =  (name-addr / addr-spec) ...
+    # name-addr      =  [ display-name ] LAQUOT addr-spec RAQUOT
+    # addr-spec      =  SIP-URI / SIPS-URI / absoluteURI
+    # display-name   =  *(token LWS)/ quoted-string
+    # quoted-string  =  SWS DQUOTE *(qdtext / quoted-pair ) DQUOTE
+    # token       =  1*(alphanum / "-" / "." / "!" / "%" / "*"
+    #                  / "_" / "+" / "`" / "'" / "~" )
+    # Lets approximate this with a regex :)
+    re_uri = "(?:sip:|sips:|tel:)[^; ]+"
+    re_qstr = '"(?:[^"]|\\")*"'
+    re_params = "(?:\s*;\s*[\w_]+\s*=\s*[^;]*)*"
+    re_value = Regexp.new("(?:(?:[^\"]*|#{re_qstr})?\s*<(?<uri>#{re_uri}#{re_params})>|(?<uri>#{re_uri}))#{re_params}")
+    m = re_value.match(text)
+    return m['uri'] if m
   end
 
   def parse(text, fields)
@@ -79,7 +96,12 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     headers.each do |header|
       name, value = header.split(':', 2)
       name = name.strip.downcase.gsub('-', '_')
-      fields[name] = value.strip
+      value = value.strip
+      fields[name] = value
+      if ['to', 'from', 'contact'].include?(name)
+        uri = parse_uri(value)
+        fields[name + "_uri"] = uri if uri
+      end
     end
     @logger.debug? && @logger.debug("SIP fields ", fields)
   end

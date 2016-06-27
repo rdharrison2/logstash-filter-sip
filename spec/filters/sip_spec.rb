@@ -14,9 +14,9 @@ describe LogStash::Filters::SIP do
       # subject is a Logstash::Event object
       insist { subject["sip_method"] } == "REGISTER"
       insist { subject["sip_cseq"] } == "1533475445 REGISTER"
-      insist { subject["sip_from"] } == "sip:jasmine.hatherly2@rd.pexip.com;tag=YSM3PueZin76wthf"
+      insist { subject["sip_from_uri"] } == "sip:jasmine.hatherly2@rd.pexip.com"
       insist { subject["sip_request_uri"] } == "sip:rd.pexip.com"
-      insist { subject["sip_to"] } == "sip:jasmine.hatherly2@rd.pexip.com"
+      insist { subject["sip_to_uri"] } == "sip:jasmine.hatherly2@rd.pexip.com"
       insist { subject["sip_contact"] } == "<sip:pexep_67_James135@10.44.100.67:9079;transport=tls>;expires=3600"
       insist { subject["sip_call_id"] } == "c1592328-3326-4870-9765-7fd362ae765a"
       insist { subject["sib_body"] } == nil
@@ -35,9 +35,9 @@ describe LogStash::Filters::SIP do
       #insist { subject.to_json } == "FOO"
       insist { subject["sip_method"] } == "INVITE"
       insist { subject["sip_cseq"] } == "100 INVITE"
-      insist { subject["sip_from"] } == '"TE002" <sip:TE002-sip@rd.pexip.com>;tag=81b7df65ad9d40db'
+      insist { subject["sip_from_uri"] } == 'sip:TE002-sip@rd.pexip.com'
       insist { subject["sip_request_uri"] } == 'sip:conference0_alias@rd.pexip.com'
-      insist { subject["sip_to"] } == '<sip:sip.021.conference0_alias@rd.pexip.com>'
+      insist { subject["sip_to_uri"] } == 'sip:sip.021.conference0_alias@rd.pexip.com'
       insist { subject["sip_contact"] } == '<sip:TE002-sip@rd.pexip.com;gr=urn:uuid:9d8fb472-4333-5609-ab19-3fddb569d725>'
       insist { subject["sip_call_id"] } == '6410edf55ca9b632@10.44.10.2'
       insist { subject["sib_body"] } == nil
@@ -51,13 +51,13 @@ describe LogStash::Filters::SIP do
       }
     CONFIG
 
-    sample "^MSIP/2.0 200 OK^MVia: SIP/2.0/TLS 10.44.100.78:9898;branch=z9hG4bKx0oUBbjdPTiMQ71X32rmpGL9hWz6Jwga;rport=52818;received=10.44.100.78^MFrom: sip:odelia.lowstetter3@rd.pexip.com;tag=t2PzhFNSpjT0ms8K^MTo: sip:odelia.lowstetter3@rd.pexip.com;tag=k5IheP20vSDRJi89^MCSeq: 200774393 REGISTER^MCall-ID: b985e2cf-6166-415e-821c-92c705bc9c2c^MDate: Fri, 03 Jun 2016 09:20:01 GMT^MContact:  <sip:pexep_78_Michael198@10.44.100.78:9898;transport=tls>;expires=253^MAllow: INVITE,ACK,OPTIONS,CANCEL,BYE,REGISTER,INFO,SUBSCRIBE,NOTIFY,MESSAGE^MSupported: categoryList,adhoclist,sdp-anat,replaces^MContent-Length: 0^M^M" do
+    sample "^MSIP/2.0 200 OK^MVia: SIP/2.0/TLS 10.44.100.78:9898;branch=z9hG4bKx0oUBbjdPTiMQ71X32rmpGL9hWz6Jwga;rport=52818;received=10.44.100.78^MFrom: \"odelia\" <sip:odelia.lowstetter3@rd.pexip.com>;tag=t2PzhFNSpjT0ms8K^MTo:  <sip:odelia.lowstetter3@rd.pexip.com>;epid=DEB027A081;tag=835c8d3e82^MCSeq: 200774393 REGISTER^MCall-ID: b985e2cf-6166-415e-821c-92c705bc9c2c^MDate: Fri, 03 Jun 2016 09:20:01 GMT^MContact:  <sip:pexep_78_Michael198@10.44.100.78:9898;transport=tls>;expires=253^MAllow: INVITE,ACK,OPTIONS,CANCEL,BYE,REGISTER,INFO,SUBSCRIBE,NOTIFY,MESSAGE^MSupported: categoryList,adhoclist,sdp-anat,replaces^MContent-Length: 0^M^M" do
       # subject is a Logstash::Event object
       insist { subject["sip_status_code"] } == 200
       insist { subject["sip_status_reason"] } == "OK"
       insist { subject["sip_cseq"] } == "200774393 REGISTER"
-      insist { subject["sip_from"] } == "sip:odelia.lowstetter3@rd.pexip.com;tag=t2PzhFNSpjT0ms8K"
-      insist { subject["sip_to"] } == "sip:odelia.lowstetter3@rd.pexip.com;tag=k5IheP20vSDRJi89"
+      insist { subject["sip_from_uri"] } == "sip:odelia.lowstetter3@rd.pexip.com"
+      insist { subject["sip_to_uri"] } == "sip:odelia.lowstetter3@rd.pexip.com"
       insist { subject["sip_call_id"] } == "b985e2cf-6166-415e-821c-92c705bc9c2c"
       insist { subject["sip_contact"] } == "<sip:pexep_78_Michael198@10.44.100.78:9898;transport=tls>;expires=253"
       insist { subject["sib_body"] } == nil
