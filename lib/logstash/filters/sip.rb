@@ -38,10 +38,15 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   config :include_keys, :validate => :array, :default => [
            "method", "request_uri",
            "status_code", "status_reason",
-           "call_id", "contact", "cseq", "from_uri", "to_uri", "user_agent"]
+           "call_id", "contact", "contact_uri", "contact_expires", "cseq",
+           "from_uri", "from_display_name", "from_tag", "from_epid",
+           "to_uri", "to_display_name", "to_tag", "to_epid",
+           "user_agent"]
 
   # An array specifying the headers/values to not add to the event
   config :exclude_keys, :validate => :array, :default => []
+
+  class InvalidURIError < StandardError; end
 
   public
   def register
@@ -62,12 +67,34 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     # token       =  1*(alphanum / "-" / "." / "!" / "%" / "*"
     #                  / "_" / "+" / "`" / "'" / "~" )
     # Lets approximate this with a regex :)
-    re_uri = "(?:sip:|sips:|tel:)[^; ]+"
-    re_qstr = '"(?:[^"]|\\")*"'
-    re_params = "(?:\s*;\s*[\w_]+\s*=\s*[^;]*)*"
-    re_value = Regexp.new("(?:(?:[^\"]*|#{re_qstr})?\s*<(?<uri>#{re_uri}#{re_params})>|(?<uri>#{re_uri}))#{re_params}")
-    m = re_value.match(text)
-    return m['uri'] if m
+    re_uri = '(?:sip:|sips:|tel:)[^; ]+'
+    re_qstr = '"(?<display_name>(?:[^"]|\\")*)"'
+    re_value = "^(?:\s*(?:(?<display_name>[^\"]+)|#{re_qstr})?\s*<(?<uri>[^>]+)>|(?<uri>#{re_uri}))\s*(?<params>.+)?$"
+    r = Regexp.new(re_value)
+    m = r.match(text)
+    if not m
+      raise InvalidURIError, "Failed to regex URI #{text} (regex=#{r})"
+    end
+    #print "m: ", m, "\n"
+    parts = { "uri" => m['uri'].strip }
+    display_name = m['display_name'] ? m['display_name'].strip : ""
+    if display_name != ""
+      parts['display_name'] = display_name
+    end
+    if m['params']
+      m['params'].split(';').each do |param|
+        param = param.strip
+        next if param == ""
+        #print "param: ", param, "\n"
+        if param.include? '='
+          (k,v) = param.split('=', 2)
+          parts[k] = v
+        else
+          parts[param] = true
+        end
+      end
+    end
+    return parts
   end
 
   def parse(text, fields)
@@ -99,8 +126,11 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
       value = value.strip
       fields[name] = value
       if ['to', 'from', 'contact'].include?(name)
-        uri = parse_uri(value)
-        fields[name + "_uri"] = uri if uri
+        parts = parse_uri(value)
+        parts.each do |k, v|
+          #print "k: ", k, " v: ", v, "\n"
+          fields[name + '_' + k] = v
+        end
       end
     end
     @logger.debug? && @logger.debug("SIP fields ", fields)
