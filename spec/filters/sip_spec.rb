@@ -22,14 +22,17 @@ describe LogStash::Filters::SIP do
       insist { subject["sip_contact_uri"] } == "sip:pexep_67_James135@10.44.100.67:9079;transport=tls"
       insist { subject["sip_contact_expires"] } == "3600"
       insist { subject["sip_call_id"] } == "c1592328-3326-4870-9765-7fd362ae765a"
-      insist { subject["sib_body"] } == nil
+      insist { subject["sip_headers"] } == nil
+      insist { subject["sip_body"] } == nil
+      insist { subject["sip_content_length"] } == 0
     end
   end
 
   describe "basic INVITE" do
     config <<-CONFIG
       filter {
-        sip { include_keys => [] exclude_keys => "sip_body" }
+        sip { include_keys => []
+              exclude_keys => ["body", "headers"] }
       }
     CONFIG
 
@@ -46,14 +49,17 @@ describe LogStash::Filters::SIP do
       insist { subject["sip_to_display_name"] } == nil
       insist { subject["sip_contact_uri"] } == 'sip:marta.jakubek@citi.com;opaque=user:epid:F_7QBuwnO1GEg9vlaQLiigAA;gruu'
       insist { subject["sip_call_id"] } == '6410edf55ca9b632@10.44.10.2'
-      insist { subject["sib_body"] } == nil
+      insist { subject["sip_headers"] } == nil
+      insist { subject["sip_body"] } == nil
+      insist { subject["sip_content_length"] } == 3305
     end
   end
 
   describe "basic response" do
     config <<-CONFIG
       filter {
-        sip { }
+        sip {
+        }
       }
     CONFIG
 
@@ -69,8 +75,44 @@ describe LogStash::Filters::SIP do
       insist { subject["sip_to_epid"] } == "DEB027A081"
       insist { subject["sip_call_id"] } == "b985e2cf-6166-415e-821c-92c705bc9c2c"
       insist { subject["sip_contact"] } == "<sip:pexep_78_Michael198@10.44.100.78:9898;transport=tls>;expires=253"
-      insist { subject["sib_body"] } == nil
+      insist { subject["sip_headers"] } == nil
+      insist { subject["sip_body"] } == nil
+      insist { subject["sip_content_length"] } == 0
     end
   end
+
+  describe "can change included keys" do
+    config <<-CONFIG
+      filter {
+        sip {
+          include_keys => [
+           "method", "request_uri",
+           "content_length",
+           "call_id",
+           "user_agent", "headers", "body"]
+        }
+      }
+    CONFIG
+
+    sample "INVITE sip:8892192371@10.44.101.22 SIP/2.0^MVia: SIP/2.0/TLS 10.44.100.69:7108;branch=z9hG4bKyI2E1cF59OftJwrDmeCSTL0uiYaKjkQb;rport^MFrom: sip:pexep_69_James6@vp.pexip.com;tag=rs4BoZOV1XiPQAm8^MTo: sip:8892192371@10.44.101.22^MCSeq: 1010607896 INVITE^MCall-ID: 0c613c08-f825-4313-a893-4e7a018020fb^MUser-Agent: PexepV2/13 (31022.0.0 (1d89ceaf5b7a19c3af4c7e72e466dd1de1deea22) built by pexbot on 2016-07-26T14:56:47Z from master)^MSupported: categoryList,adhoclist^MAllow: INVITE,ACK,OPTIONS,CANCEL,BYE,REGISTER,INFO,SUBSCRIBE,NOTIFY,MESSAGE,SERVICE^MMax-Forwards: 70^MContact: <sip:pexep_69_James6@10.44.100.69:7108;transport=tls>^MRoute: <sip:10.44.101.22:5061;transport=tls;lr>^MContent-Type: application/sdp^M^Mv=0^Mo=- 1 2 IN IP4 127.0.0.1^Ms=-^Mb=AS:64^Mt=0 0^Mm=audio 22496 RTP/AVP 101 99^Mc=IN IP4 10.44.100.69^Ma=rtpmap:101 MP4A-LATM/90000^Ma=fmtp:101 bitrate=64000;profile-level-id=24;object=23^Ma=rtpmap:99 telephone-event/8000^Ma=fmtp:99 events=0-15^Ma=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:z417GA+iRAxUX/joYilNnm5ujuGyQ1bc1Z9Zj+QN|2^48^Ma=sendrecv^Mm=application 22498 UDP/BFCP *^Mc=IN IP4 10.44.100.69^Ma=bfcpver:1^Ma=floorctrl:c-only^Ma=sendrecv^M" do
+      # subject is a Logstash::Event object
+      insist { subject["sip_method"] } == "INVITE"
+      insist { subject["sip_cseq"] } == nil
+      insist { subject["sip_from_uri"] } == nil
+      insist { subject["sip_from_display_name"] } == nil
+      insist { subject["sip_from_tag"] } == nil
+      insist { subject["sip_request_uri"] } == "sip:8892192371@10.44.101.22"
+      insist { subject["sip_user_agent"] } == "PexepV2/13 (31022.0.0 (1d89ceaf5b7a19c3af4c7e72e466dd1de1deea22) built by pexbot on 2016-07-26T14:56:47Z from master)"
+      insist { subject["sip_to_uri"] } == nil
+      insist { subject["sip_to_display_name"] } == nil
+      insist { subject["sip_contact_uri"] } == nil
+      insist { subject["sip_call_id"] } == "0c613c08-f825-4313-a893-4e7a018020fb"
+      insist { subject["sip_contact"] } == nil
+      insist { subject["sip_headers"] } == "Via: SIP/2.0/TLS 10.44.100.69:7108;branch=z9hG4bKyI2E1cF59OftJwrDmeCSTL0uiYaKjkQb;rport\nFrom: sip:pexep_69_James6@vp.pexip.com;tag=rs4BoZOV1XiPQAm8\nTo: sip:8892192371@10.44.101.22\nCSeq: 1010607896 INVITE\nCall-ID: 0c613c08-f825-4313-a893-4e7a018020fb\nUser-Agent: PexepV2/13 (31022.0.0 (1d89ceaf5b7a19c3af4c7e72e466dd1de1deea22) built by pexbot on 2016-07-26T14:56:47Z from master)\nSupported: categoryList,adhoclist\nAllow: INVITE,ACK,OPTIONS,CANCEL,BYE,REGISTER,INFO,SUBSCRIBE,NOTIFY,MESSAGE,SERVICE\nMax-Forwards: 70\nContact: <sip:pexep_69_James6@10.44.100.69:7108;transport=tls>\nRoute: <sip:10.44.101.22:5061;transport=tls;lr>\nContent-Type: application/sdp"
+      insist { subject["sip_body"] } == "v=0\no=- 1 2 IN IP4 127.0.0.1\ns=-\nb=AS:64\nt=0 0\nm=audio 22496 RTP/AVP 101 99\nc=IN IP4 10.44.100.69\na=rtpmap:101 MP4A-LATM/90000\na=fmtp:101 bitrate=64000;profile-level-id=24;object=23\na=rtpmap:99 telephone-event/8000\na=fmtp:99 events=0-15\na=crypto:1 AES_CM_128_HMAC_SHA1_80 inline:z417GA+iRAxUX/joYilNnm5ujuGyQ1bc1Z9Zj+QN|2^48\na=sendrecv\nm=application 22498 UDP/BFCP *\nc=IN IP4 10.44.100.69\na=bfcpver:1\na=floorctrl:c-only\na=sendrecv\n"
+      insist { subject["sip_content_length"] } == 449
+    end
+  end
+
 
 end

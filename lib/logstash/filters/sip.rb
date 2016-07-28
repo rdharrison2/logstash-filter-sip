@@ -37,7 +37,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   # An array specifying the headers/values to add to the event
   config :include_keys, :validate => :array, :default => [
            "method", "request_uri",
-           "status_code", "status_reason",
+           "status_code", "status_reason", "content_length",
            "call_id", "contact", "contact_uri", "contact_expires", "cseq",
            "from_uri", "from_display_name", "from_tag", "from_epid",
            "to_uri", "to_display_name", "to_tag", "to_epid",
@@ -98,17 +98,22 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   end
 
   def parse(text, fields)
-    # split into header/body via two new-lines
-    parts = text.split(@line_split + @line_split)    
-    headers = parts[0].split(@line_split)
-    # save the body if it exists
-    fields['body'] = parts[1] if parts.length > 1
-    # MCU sip messages are logged started with a newline
-    headers.shift if headers[0] == ''
-
+    # replace ^M for new-lines, and strip leading whitespace
+    text = text.gsub(@line_split, "\n").lstrip
+    # split into first-line+header/body via two new-lines
+    parts = text.split("\n\n", 2)
+    # save the body & content length if it exists
+    fields['content_length'] = 0
+    if parts.length > 1
+      fields['body'] = parts[1]
+      # Note: content length needs to count new-lines as \r\n!
+      fields['content_length'] = parts[1].gsub("\n","\r\n").length
+    end
+    # split into first line and headers
+    parts = parts[0].split("\n", 2)
     # first line is e.g. "REGISTER sip:rd.pexip.com SIP/2.0" for a request
     #  OR e.g. "SIP/2.0 200 OK" for a response
-    line = headers.shift
+    line = parts[0]
     if line.start_with?("SIP/2.0")
       (_, code, reason) = line.split
       fields['status_code'] = code.to_i
@@ -120,19 +125,26 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     end
 
     # process the headers (name : value)
-    headers.each do |header|
-      name, value = header.split(':', 2)
-      name = name.strip.downcase.gsub('-', '_')
-      value = value.strip
-      fields[name] = value
-      if ['to', 'from', 'contact'].include?(name)
-        parts = parse_uri(value)
-        parts.each do |k, v|
-          #print "k: ", k, " v: ", v, "\n"
-          fields[name + '_' + k] = v
+    if parts.length > 1
+      fields['headers'] = parts[1]
+      headers = parts[1].split("\n")
+      headers.each do |header|
+        name, value = header.split(':', 2)
+        name = name.strip.downcase.gsub('-', '_')
+        value = value.strip
+        # handle integer values
+        value = value.to_i if name == 'content_length'
+        fields[name] = value
+        if ['to', 'from', 'contact'].include?(name)
+          parts = parse_uri(value)
+          parts.each do |k, v|
+            #print "k: ", k, " v: ", v, "\n"
+            fields[name + '_' + k] = v
+          end
         end
       end
     end
+    #print "SIP fields: ", fields, "\n"
     @logger.debug? && @logger.debug("SIP fields ", fields)
   end
 
@@ -152,6 +164,8 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
 
     return if fields.empty?
 
+    #print "include keys: ", @include_keys, "\n"
+    #print "exclude keys: ", @exclude_keys, "\n"
     fields.each do |k, v|
       event[@prefix + k] = v if want_key(k)
     end
