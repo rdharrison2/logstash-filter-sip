@@ -135,7 +135,8 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
         # handle integer values
         value = value.to_i if name == 'content_length'
         fields[name] = value
-        if ['to', 'from', 'contact'].include?(name)
+        # Note: contact header may have value *
+        if ['to', 'from', 'contact'].include?(name) and value != '*'
           parts = parse_uri(value)
           parts.each do |k, v|
             #print "k: ", k, " v: ", v, "\n"
@@ -157,7 +158,12 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     when nil
       # Nothing to do
     when String
-      parse(value, fields)
+      begin
+        parse(value, fields)
+      rescue
+        @logger.error("Failed to parse SIP message", :value => value)
+        raise
+      end
     else
       @logger.warn("SIP filter has no support for this type of data", :type => value.class, :value => value)
     end
