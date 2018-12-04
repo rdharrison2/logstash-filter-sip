@@ -162,7 +162,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   public
   def filter(event)
     fields = Hash.new
-    value = event[@source]
+    value = event.get(@source)
 
     case value
     when nil
@@ -183,7 +183,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     #print "include keys: ", @include_keys, "\n"
     #print "exclude keys: ", @exclude_keys, "\n"
     fields.each do |k, v|
-      event[@prefix + k] = v if want_key(k)
+      event.set(@prefix + k, v) if want_key(k)
     end
     filter_matched(event)
   end # def filter
