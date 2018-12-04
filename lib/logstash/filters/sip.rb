@@ -156,7 +156,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
       end
     end
     #print "SIP fields: ", fields, "\n"
-    @logger.debug? && @logger.debug("SIP fields ", fields)
+    @logger.debug? and @logger.debug("SIP fields ", fields)
   end
 
   public
