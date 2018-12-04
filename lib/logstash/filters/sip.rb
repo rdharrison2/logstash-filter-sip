@@ -170,11 +170,12 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     when String
       begin
         parse(value, fields)
-      rescue
-        @logger.error("Failed to parse SIP message", :value => value)
-        raise
+      rescue => e
+        event.tag("_sipparsefailure")
+        @logger.error("Failed to parse SIP message (#{e.backtrace.first}: #{e.message} / #{e.class})", :value => value)
       end
     else
+      event.tag("_sipparsefailure")
       @logger.warn("SIP filter has no support for this type of data", :type => value.class, :value => value)
     end
 
