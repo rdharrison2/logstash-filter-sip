@@ -136,6 +136,10 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
       headers = parts[1].split("\n")
       headers.each do |header|
         name, value = header.split(':', 2)
+        if name.nil? || value.nil?
+          @logger.debug? and @logger.debug("invalid header: <#{header}>")
+          next
+        end
         name = name.strip.downcase.gsub('-', '_')
         value = value.strip
         # handle integer values
