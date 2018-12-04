@@ -117,9 +117,13 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     #  OR e.g. "SIP/2.0 200 OK" for a response
     line = parts[0]
     if line.start_with?("SIP/2.0")
-      (_, code, reason) = line.split
+      (_, code, reason) = line.split(/\s/, 3)
       fields['status_code'] = code.to_i
-      fields['status_reason'] = reason
+      if reason.nil?
+        fields['status_reason'] = nil
+      else
+        fields['status_reason'] = reason.strip
+      end
     else
       (method, request_uri, _) = line.split
       fields['method'] = method
