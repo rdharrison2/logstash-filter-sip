@@ -98,6 +98,8 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   end
 
   def parse(text, fields)
+    # replace "\r\n" for new-lines, and strip leading whitespace
+    text = text.gsub("\r\n", "\n")
     # replace ^M for new-lines, and strip leading whitespace
     text = text.gsub(@line_split, "\n").lstrip
     # split into first-line+header/body via two new-lines
