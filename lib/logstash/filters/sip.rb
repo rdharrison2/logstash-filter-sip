@@ -58,7 +58,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     return true
   end
 
-  def parse_uri(text)
+  def parse_uri(name, text)
     # contact-param  =  (name-addr / addr-spec) ...
     # name-addr      =  [ display-name ] LAQUOT addr-spec RAQUOT
     # addr-spec      =  SIP-URI / SIPS-URI / absoluteURI
@@ -73,7 +73,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     r = Regexp.new(re_value)
     m = r.match(text)
     if not m
-      raise InvalidURIError, "Failed to regex URI #{text} (regex=#{r})"
+      raise InvalidURIError, "Failed to regex URI #{name}: #{text} (regex=#{r})"
     end
     #print "m: ", m, "\n"
     parts = { "uri" => m['uri'].strip }
@@ -137,7 +137,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
         fields[name] = value
         # Note: contact header may have value *
         if ['to', 'from', 'contact'].include?(name) and value != '*'
-          parts = parse_uri(value)
+          parts = parse_uri(name, value)
           parts.each do |k, v|
             #print "k: ", k, " v: ", v, "\n"
             fields[name + '_' + k] = v
