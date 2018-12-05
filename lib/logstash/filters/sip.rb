@@ -46,6 +46,9 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   # An array specifying the headers/values to not add to the event
   config :exclude_keys, :validate => :array, :default => []
 
+  # A regex to validate headers
+  config :header_regex, :validate => :string, :default => '.*'
+
   class InvalidURIError < StandardError; end
 
   public
@@ -131,12 +134,13 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     end
 
     # process the headers (name : value)
+    header_regex = Regexp.new(@header_regex)
     if parts.length > 1
       fields['headers'] = parts[1]
       headers = parts[1].split("\n")
       headers.each do |header|
         name, value = header.split(':', 2)
-        if name.nil? || value.nil?
+        if !(header_regex.match(header)) || name.nil? || value.nil?
           @logger.debug? and @logger.debug("invalid header: <#{header}>")
           next
         end
@@ -156,7 +160,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
       end
     end
     #print "SIP fields: ", fields, "\n"
-    @logger.debug? and @logger.debug("SIP fields ", fields)
+    @logger.debug? and @logger.debug("SIP fields", fields)
   end
 
   public
