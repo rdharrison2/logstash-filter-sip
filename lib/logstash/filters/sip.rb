@@ -46,6 +46,9 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   # An array specifying the headers/values to not add to the event
   config :exclude_keys, :validate => :array, :default => []
 
+  # A regex to validate headers
+  config :header_regex, :validate => :string, :default => '.*'
+
   class InvalidURIError < StandardError; end
 
   public
@@ -58,7 +61,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     return true
   end
 
-  def parse_uri(text)
+  def parse_uri(name, text)
     # contact-param  =  (name-addr / addr-spec) ...
     # name-addr      =  [ display-name ] LAQUOT addr-spec RAQUOT
     # addr-spec      =  SIP-URI / SIPS-URI / absoluteURI
@@ -73,7 +76,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     r = Regexp.new(re_value)
     m = r.match(text)
     if not m
-      raise InvalidURIError, "Failed to regex URI #{text} (regex=#{r})"
+      raise InvalidURIError, "Failed to regex URI #{name}: #{text} (regex=#{r})"
     end
     #print "m: ", m, "\n"
     parts = { "uri" => m['uri'].strip }
@@ -98,6 +101,8 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
   end
 
   def parse(text, fields)
+    # replace "\r\n" for new-lines, and strip leading whitespace
+    text = text.gsub("\r\n", "\n")
     # replace ^M for new-lines, and strip leading whitespace
     text = text.gsub(@line_split, "\n").lstrip
     # split into first-line+header/body via two new-lines
@@ -115,9 +120,13 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     #  OR e.g. "SIP/2.0 200 OK" for a response
     line = parts[0]
     if line.start_with?("SIP/2.0")
-      (_, code, reason) = line.split
+      (_, code, reason) = line.split(/\s/, 3)
       fields['status_code'] = code.to_i
-      fields['status_reason'] = reason
+      if reason.nil?
+        fields['status_reason'] = nil
+      else
+        fields['status_reason'] = reason.strip
+      end
     else
       (method, request_uri, _) = line.split
       fields['method'] = method
@@ -125,11 +134,16 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     end
 
     # process the headers (name : value)
+    header_regex = Regexp.new(@header_regex)
     if parts.length > 1
       fields['headers'] = parts[1]
       headers = parts[1].split("\n")
       headers.each do |header|
         name, value = header.split(':', 2)
+        if !(header_regex.match(header)) || name.nil? || value.nil?
+          @logger.debug? and @logger.debug("invalid header: <#{header}>")
+          next
+        end
         name = name.strip.downcase.gsub('-', '_')
         value = value.strip
         # handle integer values
@@ -137,7 +151,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
         fields[name] = value
         # Note: contact header may have value *
         if ['to', 'from', 'contact'].include?(name) and value != '*'
-          parts = parse_uri(value)
+          parts = parse_uri(name, value)
           parts.each do |k, v|
             #print "k: ", k, " v: ", v, "\n"
             fields[name + '_' + k] = v
@@ -146,13 +160,13 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
       end
     end
     #print "SIP fields: ", fields, "\n"
-    @logger.debug? && @logger.debug("SIP fields ", fields)
+    @logger.debug? and @logger.debug("SIP fields", fields)
   end
 
   public
   def filter(event)
     fields = Hash.new
-    value = event[@source]
+    value = event.get(@source)
 
     case value
     when nil
@@ -160,11 +174,12 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     when String
       begin
         parse(value, fields)
-      rescue
-        @logger.error("Failed to parse SIP message", :value => value)
-        raise
+      rescue => e
+        event.tag("_sipparsefailure")
+        @logger.error("Failed to parse SIP message (#{e.backtrace.first}: #{e.message} / #{e.class})", :value => value)
       end
     else
+      event.tag("_sipparsefailure")
       @logger.warn("SIP filter has no support for this type of data", :type => value.class, :value => value)
     end
 
@@ -173,7 +188,7 @@ class LogStash::Filters::SIP < LogStash::Filters::Base
     #print "include keys: ", @include_keys, "\n"
     #print "exclude keys: ", @exclude_keys, "\n"
     fields.each do |k, v|
-      event[@prefix + k] = v if want_key(k)
+      event.set(@prefix + k, v) if want_key(k)
     end
     filter_matched(event)
   end # def filter
